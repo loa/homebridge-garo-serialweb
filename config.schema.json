@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "GaroSerialweb",
   "pluginType": "platform",
   "singular": true,
   "schema": {
@@ -9,7 +9,18 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "default": "GaroSerialweb"
+      },
+      "devices": {
+        "title": "Garo Wifi Modules",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "address": {"title": "address", "type": "string"}
+          },
+          "required": ["address"]
+        }
       }
     }
   }
