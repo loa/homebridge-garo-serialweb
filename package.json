@@ -2,7 +2,7 @@
   "name": "homebridge-garo-serialweb",
   "displayName": "Garo Serialweb",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Homebridge plugin to control local Garo charge boxes with serialweb.",
   "author": "Carl Loa Odin",
   "license": "Apache-2.0",
