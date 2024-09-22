@@ -29,8 +29,8 @@ export class GaroAccessory {
       );
 
     this.service =
-      this.accessory.getService(this.platform.Service.Switch) ||
-      this.accessory.addService(this.platform.Service.Switch);
+      this.accessory.getService(this.platform.Service.Outlet) ||
+      this.accessory.addService(this.platform.Service.Outlet);
 
     this.service.setCharacteristic(
       this.platform.Characteristic.Name,
@@ -41,6 +41,10 @@ export class GaroAccessory {
       .getCharacteristic(this.platform.Characteristic.On)
       .onSet(this.setOn.bind(this))
       .onGet(this.getOn.bind(this));
+
+    this.service
+      .getCharacteristic(this.platform.Characteristic.OutletInUse)
+      .onGet(this.getInUse.bind(this));
   }
 
   async setOn(value: CharacteristicValue) {
@@ -64,5 +68,18 @@ export class GaroAccessory {
     this.platform.log.debug('Get Characteristic On ->', isOn);
 
     return isOn;
+  }
+
+  async getInUse(): Promise<CharacteristicValue> {
+    const response = await fetch(
+      `${this.accessory.context.device.address}/servlet/rest/chargebox/status`,
+    );
+    const data = (await response.json()) as GaroStatusResponse;
+
+    const inUse = data.mainCharger.connector !== 'INITIALIZATION';
+
+    this.platform.log.debug(`Get Characteristic OutletInUse (${data.mainCharger.connector}) ->`, inUse);
+
+    return inUse;
   }
 }
