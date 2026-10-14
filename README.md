@@ -4,213 +4,140 @@
 
 </p>
 
-<span align="center">
+# Homebridge Garo Serialweb
 
-# Homebridge Platform Plugin Template
+Homebridge plugin that exposes a local [GARO](https://www.garo.se/) charge box as a HomeKit outlet. It talks to the charger through **serialweb**, the web service that runs on the GARO Wi-Fi module.
 
-</span>
+> **The serialweb Raspberry Pi add-on is required.** This plugin only works when that module is installed in the charger and reachable on the same network as Homebridge. A charger without the add-on has no serialweb API to control.
 
-> [!IMPORTANT]
-> **Homebridge v2.0 Information**
->
-> This template currently has a
-> - `package.json -> engines.homebridge` value of `"^1.8.0 || ^2.0.0-beta.0"`
-> - `package.json -> devDependencies.homebridge` value of `"^2.0.0-beta.0"`
->
-> This is to ensure that your plugin will build and run on both Homebridge v1 and v2.
->
-> Once Homebridge v2.0 has been released, you can remove the `-beta.0` in both places.
+## Supported chargers
 
-> [!IMPORTANT]
-> **Node v22 Information**
->
-> This template currently has a
-> - `package.json -> engines.node` value of `"^18.20.4 || ^20.16.0 || ^22.5.1"`
->
-> This is to remind developers that plugins should be supporting Node v22 from October 2024.
+The add-on is the GARO WLAN communication module **GLB-WLAN** (article **353437**, also sold as **WIFI MODUL GLB/GTB/GTC**). It is a Raspberry Pi board. Wi-Fi models ship with it fitted. The same module can be installed later in chargers sold without Wi-Fi. In a cluster, one module in the master charger is enough.
 
----
+| Series | What it is | Works with this plugin |
+| --- | --- | --- |
+| **GLB** | Single-outlet wallbox, including GLB, GLBW, GLBM, GLBDC, GLBDCW and GLBDCWM | Yes, with the serialweb module installed |
+| **GTB** | Twinbox with two outlets, including GTBDC, GTBDCW and GTBDCM | Yes, with the serialweb module installed |
+| **GTC** | GTC Nova stations, including GTCDC and GTCDCW | Yes, with the serialweb module installed |
 
-This is a template Homebridge dynamic platform plugin and can be used as a base to help you get started developing your own plugin.
+These later GARO chargers use a different controller and do not run serialweb:
 
-This template should be used in conjunction with the [developer documentation](https://developers.homebridge.io/). A full list of all supported service types, and their characteristics is available on this site.
+- GLB+
+- GTB+ and Twin+
+- LS4
+- Entity
 
-### Clone As Template
+Each configured module becomes one HomeKit accessory, named with the charge-box serial number reported by serialweb. The on/off command sets the charge-box mode for that module. Connector state is read from `mainCharger`.
 
-Click the link below to create a new GitHub Repository using this template, or click the *Use This Template* button above.
+## Serialweb
 
-<span align="center">
+serialweb is the local web application (`serialweb.war`) on the Raspberry Pi add-on. It is the same interface used to set Wi-Fi, schedules, RFID and load balancing. This plugin uses its REST API. It does not use the GARO cloud.
 
-### [Create New Repository From Template](https://github.com/homebridge/homebridge-plugin-template/generate)
+### Reach the module
 
-</span>
+The module starts as its own access point. The SSID and password are on the label inside the front cover (GLB: behind the black front). Connect to that network and open <http://172.24.1.1>.
 
-### Setup Development Environment
+Join the module to the home network from that page, over Wi-Fi or the RJ45 port on the module. Only 2.4 GHz WPA/WPA2 networks with a password are supported. After it is on the LAN, open the UI from a device on the same network:
 
-To develop Homebridge plugins you must have Node.js 18 or later installed, and a modern code editor such as [VS Code](https://code.visualstudio.com/). This plugin template uses [TypeScript](https://www.typescriptlang.org/) to make development easier and comes with pre-configured settings for [VS Code](https://code.visualstudio.com/) and ESLint. If you are using VS Code install these extensions:
+- `http://<module-ip>:8080/serialweb/`
+- or <http://chargebox.garo.se>, which the manuals tell you to use once the charger is on the local network
 
-- [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+Give the module a stable DHCP reservation. The plugin needs that address on every restart.
 
-### Install Development Dependencies
-
-Using a terminal, navigate to the project folder and run this command to install the development dependencies:
+Confirm serialweb answers before adding it to Homebridge:
 
 ```shell
-npm install
+curl -sS http://192.168.1.50:8080/servlet/rest/chargebox/status
 ```
 
-### Update package.json
+A working module returns JSON with `serialNumber`, `mode` and `mainCharger`. Firmware from **1.3.1** onward serves this path on port **8080**. Older modules used `http://<module-ip>:2222/rest/chargebox/status`. This plugin calls the port 8080 servlet paths, so update the module from `http://<module-ip>:8080/update` (package from <https://www.webel-online.se/wifi>) when the status URL above does not respond.
 
-Open the [`package.json`](./package.json) and change the following attributes:
+### Status
 
-- `name` - this should be prefixed with `homebridge-` or `@username/homebridge-`, is case-sensitive, and contains no spaces nor special characters apart from a dash `-`
-- `displayName` - this is the "nice" name displayed in the Homebridge UI
-- `homepage` - link to your GitHub repo's `README.md`
-- `repository.url` - link to your GitHub repo
-- `bugs.url` - link to your GitHub repo issues page
-
-When you are ready to publish the plugin you should set `private` to false, or remove the attribute entirely.
-
-### Update Plugin Defaults
-
-Open the [`src/settings.ts`](./src/settings.ts) file and change the default values:
-
-- `PLATFORM_NAME` - Set this to be the name of your platform. This is the name of the platform that users will use to register the plugin in the Homebridge `config.json`.
-- `PLUGIN_NAME` - Set this to be the same name you set in the [`package.json`](./package.json) file.
-
-Open the [`config.schema.json`](./config.schema.json) file and change the following attribute:
-
-- `pluginAlias` - set this to match the `PLATFORM_NAME` you defined in the previous step.
-
-### Build Plugin
-
-TypeScript needs to be compiled into JavaScript before it can run. The following command will compile the contents of your [`src`](./src) directory and put the resulting code into the `dist` folder.
-
-```shell
-npm run build
+```http
+GET /servlet/rest/chargebox/status
 ```
 
-### Link To Homebridge
+The fields this plugin reads:
 
-Run this command so your global installation of Homebridge can discover the plugin in your development environment:
-
-```shell
-npm link
-```
-
-You can now start Homebridge, use the `-D` flag, so you can see debug log messages in your plugin:
-
-```shell
-homebridge -D
-```
-
-### Watch For Changes and Build Automatically
-
-If you want to have your code compile automatically as you make changes, and restart Homebridge automatically between changes, you first need to add your plugin as a platform in `~/.homebridge/config.json`:
-```
+```json
 {
-...
-    "platforms": [
-        {
-            "name": "Config",
-            "port": 8581,
-            "platform": "config"
-        },
-        {
-            "name": "<PLUGIN_NAME>",
-            //... any other options, as listed in config.schema.json ...
-            "platform": "<PLATFORM_NAME>"
-        }
-    ]
+  "serialNumber": 1234567,
+  "mode": "ALWAYS_ON",
+  "mainCharger": {
+    "reference": "Primary",
+    "serialNumber": 1234567,
+    "connector": "CHARGING"
+  }
 }
 ```
 
-and then you can run:
+`mode` is the charge-box mode:
 
-```shell
-npm run watch
+| Value | Meaning |
+| --- | --- |
+| `ALWAYS_ON` | Charging is allowed |
+| `ALWAYS_OFF` | Charging is disabled |
+| `SCHEMA` | The schedule configured in the serialweb UI is in control |
+
+`mainCharger.connector` is the outlet state. Values seen on these chargers include `INITIALIZATION`, `NOT_CONNECTED`, `CONNECTED`, `SEARCH_COMM`, `CHARGING`, `CHARGING_PAUSED`, `CHARGING_FINISHED`, `CHARGING_CANCELLED`, `DISABLED`, and fault values such as `RCD_FAULT`, `OVERHEAT`, `CABLE_FAULT` and `CONTACTOR_FAULT`. A twinbox also returns `twinCharger` with the same shape. This plugin reads `mainCharger` only.
+
+### Set the mode
+
+```http
+POST /servlet/rest/chargebox/mode/ALWAYS_ON
+POST /servlet/rest/chargebox/mode/ALWAYS_OFF
+POST /servlet/rest/chargebox/mode/SCHEMA
 ```
 
-This will launch an instance of Homebridge in debug mode which will restart every time you make a change to the source code. It will load the config stored in the default location under `~/.homebridge`. You may need to stop other running instances of Homebridge while using this command to prevent conflicts. You can adjust the Homebridge startup command in the [`nodemon.json`](./nodemon.json) file.
+The body is empty. HomeKit on sends `ALWAYS_ON`. HomeKit off sends `ALWAYS_OFF`. The plugin leaves `SCHEMA` to the serialweb UI. While the box is in `SCHEMA`, the HomeKit outlet reports off, because `mode` is not `ALWAYS_ON`.
 
-### Customise Plugin
+The same API also has `config`, `schema`, `currentlimit`, `meterinfo/CENTRAL100`, `meterinfo/EXTERNAL`, `slaves` and `lbconfig`. This plugin does not call those.
 
-You can now start customising the plugin template to suit your requirements.
+## Installation
 
-- [`src/platform.ts`](./src/platform.ts) - this is where your device setup and discovery should go.
-- [`src/platformAccessory.ts`](./src/platformAccessory.ts) - this is where your accessory control logic should go, you can rename or create multiple instances of this file for each accessory type you need to implement as part of your platform plugin. You can refer to the [developer documentation](https://developers.homebridge.io/) to see what characteristics you need to implement for each service type.
-- [`config.schema.json`](./config.schema.json) - update the config schema to match the config you expect from the user. See the [Plugin Config Schema Documentation](https://developers.homebridge.io/#/config-schema).
-
-### Versioning Your Plugin
-
-Given a version number `MAJOR`.`MINOR`.`PATCH`, such as `1.4.3`, increment the:
-
-1. **MAJOR** version when you make breaking changes to your plugin,
-2. **MINOR** version when you add functionality in a backwards compatible manner, and
-3. **PATCH** version when you make backwards compatible bug fixes.
-
-You can use the `npm version` command to help you with this:
+Install from the Homebridge UI, or:
 
 ```shell
-# major update / breaking changes
-npm version major
-
-# minor update / new features
-npm version update
-
-# patch / bugfixes
-npm version patch
+sudo npm install -g homebridge-garo-serialweb
 ```
 
-### Publish Package
+Requires Homebridge `^1.8.0` or `^2.0.0-beta.0`, and Node.js 18, 20 or 22.
 
-When you are ready to publish your plugin to [npm](https://www.npmjs.com/), make sure you have removed the `private` attribute from the [`package.json`](./package.json) file then run:
+## Configuration
 
-```shell
-npm publish
+Add the platform in the Homebridge UI, or in `config.json`. `address` is the base URL of the serialweb module, including `http://` and port `8080`.
+
+```json
+{
+  "platforms": [
+    {
+      "platform": "GaroSerialweb",
+      "name": "GaroSerialweb",
+      "devices": [
+        {
+          "address": "http://192.168.1.50:8080"
+        }
+      ]
+    }
+  ]
+}
 ```
 
-If you are publishing a scoped plugin, i.e. `@username/homebridge-xxx` you will need to add `--access=public` to command the first time you publish.
+Add one entry per module. Restart Homebridge after changing the list. The plugin creates an accessory the first time the status request succeeds, and restores it from the Homebridge cache after that.
 
-#### Publishing Beta Versions
+## HomeKit
 
-You can publish *beta* versions of your plugin for other users to test before you release it to everyone.
+Each charger is an **Outlet**:
 
-```shell
-# create a new pre-release version (eg. 2.1.0-beta.1)
-npm version prepatch --preid beta
+| HomeKit | serialweb |
+| --- | --- |
+| On | `POST .../mode/ALWAYS_ON` |
+| Off | `POST .../mode/ALWAYS_OFF` |
+| Outlet In Use | `mainCharger.connector` is any value other than `INITIALIZATION` |
 
-# publish to @beta
-npm publish --tag=beta
-```
+Manufacturer is `Garo`. The model shown in HomeKit is `GARO`. Name and serial number are the charge-box serial number from the status response.
 
-Users can then install the  *beta* version by appending `@beta` to the install command, for example:
+## License
 
-```shell
-sudo npm install -g homebridge-example-plugin@beta
-```
-
-### Best Practices
-
-Consider creating your plugin with the [Homebridge Verified](https://github.com/homebridge/verified) criteria in mind. This will help you to create a plugin that is easy to use and works well with Homebridge.
-You can then submit your plugin to the Homebridge Verified list for review.
-The most up-to-date criteria can be found [here](https://github.com/homebridge/verified#requirements).
-For reference, the current criteria are:
-
-- The plugin must successfully install.
-- The plugin must implement the [Homebridge Plugin Settings GUI](https://github.com/oznu/homebridge-config-ui-x/wiki/Developers:-Plugin-Settings-GUI).
-- The plugin must not start unless it is configured.
-- The plugin must not execute post-install scripts that modify the users' system in any way.
-- The plugin must not contain any analytics or calls that enable you to track the user.
-- The plugin must not throw unhandled exceptions, the plugin must catch and log its own errors.
-- The plugin must be published to npm and the source code available on GitHub.
-  - A GitHub release - with patch notes - should be created for every new version of your plugin.
-- The plugin must run on all [supported LTS versions of Node.js](https://github.com/homebridge/homebridge/wiki/How-To-Update-Node.js), at the time of writing this is Node.js v16 and v18.
-- The plugin must not require the user to run Homebridge in a TTY or with non-standard startup parameters, even for initial configuration.
-- If the plugin needs to write files to disk (cache, keys, etc.), it must store them inside the Homebridge storage directory.
-
-### Useful Links
-
-Note these links are here for help but are not supported/verified by the Homebridge team
-
-- [Custom Characteristics](https://github.com/homebridge/homebridge-plugin-template/issues/20)
+[Apache-2.0](./LICENSE)
